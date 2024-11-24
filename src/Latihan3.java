@@ -1,10 +1,15 @@
 
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.io.File;
+import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 import javax.swing.table.DefaultTableModel;
 
@@ -32,7 +37,22 @@ public class Latihan3 extends javax.swing.JFrame {
         createKontakTable();
         initActionListeners();
         loadKontak();
+        
+    jTextField2.addKeyListener(new KeyAdapter() {
+    @Override
+    public void keyTyped(KeyEvent e) {
+        char c = e.getKeyChar();
+        // Cek jika karakter yang dimasukkan bukan angka, maka batalkan input
+        if (!Character.isDigit(c)) {
+            e.consume();  // Mencegah karakter selain angka untuk dimasukkan
+            // Menampilkan notifikasi jika memasukkan huruf
+            JOptionPane.showMessageDialog(null, "Hanya angka yang diperbolehkan!", "Input Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
+    });
+    }
+    
+    
       //Menghubungkan aplikasi ke database SQLite  
     private void connectToDatabase() {
         try {
@@ -65,56 +85,86 @@ public class Latihan3 extends javax.swing.JFrame {
         }
     }
     
-    //Menambahkan kontak baru ke dalam database.
-     private void addKontak() {
+    private void addKontak() {
+    String nama = jTextField1.getText();
+    String nomorTelepon = jTextField2.getText();
+    String kategori = (String) jComboBox1.getSelectedItem();
+
+    // Validasi jika nama atau nomor telepon kosong
+    if (nama.isEmpty() || nomorTelepon.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "Nama dan Nomor Telepon tidak boleh kosong");
+        return;
+    }
+
+    // Validasi nomor telepon hanya berisi angka dan panjangnya sesuai
+    if (!nomorTelepon.matches("[0-9]+")) {
+        JOptionPane.showMessageDialog(this, "Nomor telepon hanya boleh berisi angka");
+        return;
+    }
+
+    if (nomorTelepon.length() < 10 || nomorTelepon.length() > 13) {
+        JOptionPane.showMessageDialog(this, "Nomor telepon harus terdiri dari 10 hingga 13 angka");
+        return;
+    }
+
+    try {
+        String sql = "INSERT INTO kontak (nama, nomor_telepon, kategori) VALUES (?, ?, ?)";
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setString(1, nama);
+        stmt.setString(2, nomorTelepon);
+        stmt.setString(3, kategori);
+        stmt.executeUpdate();
+        JOptionPane.showMessageDialog(this, "Kontak berhasil ditambahkan");
+        loadKontak();
+    } catch (SQLException e) {
+        e.printStackTrace();
+        JOptionPane.showMessageDialog(this, "Gagal menambah kontak");
+    }
+}
+
+private void editKontak() {
+    int selectedRow = jTable1.getSelectedRow();
+    if (selectedRow != -1) {
+        int id = (int) jTable1.getValueAt(selectedRow, 0);
         String nama = jTextField1.getText();
         String nomorTelepon = jTextField2.getText();
         String kategori = (String) jComboBox1.getSelectedItem();
 
+        // Validasi jika nama atau nomor telepon kosong
         if (nama.isEmpty() || nomorTelepon.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Nama dan Nomor Telepon tidak boleh kosong");
             return;
         }
 
+        // Validasi nomor telepon hanya berisi angka dan panjangnya sesuai
+        if (!nomorTelepon.matches("[0-9]+")) {
+            JOptionPane.showMessageDialog(this, "Nomor telepon hanya boleh berisi angka");
+            return;
+        }
+
+        if (nomorTelepon.length() < 10 || nomorTelepon.length() > 13) {
+            JOptionPane.showMessageDialog(this, "Nomor telepon harus terdiri dari 10 hingga 13 angka");
+            return;
+        }
+
         try {
-            String sql = "INSERT INTO kontak (nama, nomor_telepon, kategori) VALUES (?, ?, ?)";
+            String sql = "UPDATE kontak SET nama = ?, nomor_telepon = ?, kategori = ? WHERE id = ?";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setString(1, nama);
             stmt.setString(2, nomorTelepon);
             stmt.setString(3, kategori);
+            stmt.setInt(4, id);
             stmt.executeUpdate();
-            JOptionPane.showMessageDialog(this, "Kontak berhasil ditambahkan");
+            JOptionPane.showMessageDialog(this, "Kontak berhasil diperbarui");
             loadKontak();
         } catch (SQLException e) {
             e.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Gagal menambah kontak");
+            JOptionPane.showMessageDialog(this, "Gagal mengedit kontak");
         }
     }
-     
-     private void editKontak() {
-        int selectedRow = jTable1.getSelectedRow();
-        if (selectedRow != -1) {
-            int id = (int) jTable1.getValueAt(selectedRow, 0);
-            String nama = jTextField1.getText();
-            String nomorTelepon = jTextField2.getText();
-            String kategori = (String) jComboBox1.getSelectedItem();
+}
 
-            try {
-                String sql = "UPDATE kontak SET nama = ?, nomor_telepon = ?, kategori = ? WHERE id = ?";
-                PreparedStatement stmt = conn.prepareStatement(sql);
-                stmt.setString(1, nama);
-                stmt.setString(2, nomorTelepon);
-                stmt.setString(3, kategori);
-                stmt.setInt(4, id);
-                stmt.executeUpdate();
-                JOptionPane.showMessageDialog(this, "Kontak berhasil diperbarui");
-                loadKontak();
-            } catch (SQLException e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Gagal mengedit kontak");
-            }
-        }
-    }
+
      
       private void deleteKontak() {
         int selectedRow = jTable1.getSelectedRow();
@@ -184,6 +234,71 @@ public class Latihan3 extends javax.swing.JFrame {
         jButton3.addActionListener(e -> deleteKontak());
         jButton4.addActionListener(e -> searchKontak());
     }
+    
+     private void saveTableToCSV() {
+    System.out.println("Memulai metode saveTableToCSV"); // Debug awal
+    
+    // Membuka dialog untuk memilih lokasi penyimpanan file CSV
+    JFileChooser fileChooser = new JFileChooser();
+    fileChooser.setDialogTitle("Pilih lokasi untuk menyimpan file CSV");
+    fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("CSV Files", "csv"));
+
+    int userSelection = fileChooser.showSaveDialog(null); // Ganti 'this' dengan 'null' agar dialog muncul
+    System.out.println("Dialog file chooser muncul");
+
+    if (userSelection == JFileChooser.APPROVE_OPTION) {
+        File fileToSave = fileChooser.getSelectedFile();
+        System.out.println("User memilih file: " + fileToSave.getAbsolutePath());
+
+        // Tambahkan ekstensi .csv jika tidak ada
+        if (!fileToSave.getName().endsWith(".csv")) {
+            fileToSave = new File(fileToSave.getAbsolutePath() + ".csv");
+            System.out.println("Ekstensi .csv ditambahkan: " + fileToSave.getAbsolutePath());
+        }
+
+        try (PrintWriter writer = new PrintWriter(fileToSave)) {
+            javax.swing.table.TableModel model = jTable1.getModel();
+            int rowCount = model.getRowCount();
+            int colCount = model.getColumnCount();
+
+            System.out.println("Jumlah baris: " + rowCount + ", Jumlah kolom: " + colCount);
+
+            // Tulis header tabel
+            for (int col = 0; col < colCount; col++) {
+                writer.print(model.getColumnName(col)); // Menulis nama kolom
+                if (col < colCount - 1) {
+                    writer.print(","); // Tambahkan koma jika bukan kolom terakhir
+                }
+            }
+            writer.println(); // Pindah ke baris baru setelah header
+
+            // Tulis data tabel
+            for (int row = 0; row < rowCount; row++) {
+                for (int col = 0; col < colCount; col++) {
+                    Object value = model.getValueAt(row, col);
+                    writer.print(value != null ? value.toString() : ""); // Null-safe
+                    if (col < colCount - 1) {
+                        writer.print(","); // Tambahkan koma jika bukan kolom terakhir
+                    }
+                }
+                writer.println(); // Pindah ke baris baru setelah setiap baris data
+            }
+
+            System.out.println("Data tabel berhasil ditulis ke file CSV");
+            javax.swing.JOptionPane.showMessageDialog(
+                null,
+                "File CSV berhasil disimpan ke " + fileToSave.getAbsolutePath()
+            );
+        } catch (Exception e) {
+            javax.swing.JOptionPane.showMessageDialog(
+                null,
+                "Gagal menyimpan file CSV: " + e.getMessage()
+            );
+        }
+    } else {
+        System.out.println("User membatalkan penyimpanan");
+    }
+    }
 
 
     /**
@@ -207,6 +322,7 @@ public class Latihan3 extends javax.swing.JFrame {
         jButton4 = new javax.swing.JButton();
         jScrollPane2 = new javax.swing.JScrollPane();
         jTable1 = new javax.swing.JTable();
+        jButton5 = new javax.swing.JButton();
         jPanel2 = new javax.swing.JPanel();
         jTextField1 = new javax.swing.JTextField();
         jLabel1 = new javax.swing.JLabel();
@@ -254,6 +370,13 @@ public class Latihan3 extends javax.swing.JFrame {
         ));
         jScrollPane2.setViewportView(jTable1);
 
+        jButton5.setText("Simpan");
+        jButton5.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton5ActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
         jPanel1Layout.setHorizontalGroup(
@@ -279,12 +402,14 @@ public class Latihan3 extends javax.swing.JFrame {
                                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                                     .addComponent(jComboBox1, javax.swing.GroupLayout.PREFERRED_SIZE, 278, javax.swing.GroupLayout.PREFERRED_SIZE)
                                     .addComponent(jTextField2, javax.swing.GroupLayout.PREFERRED_SIZE, 278, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                            .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                                 .addGroup(jPanel1Layout.createSequentialGroup()
-                                    .addComponent(jTextField3, javax.swing.GroupLayout.PREFERRED_SIZE, 318, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                    .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                    .addComponent(jButton4))
-                                .addComponent(jScrollPane2, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 396, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                                    .addComponent(jTextField3)
+                                    .addGap(18, 18, 18)
+                                    .addComponent(jButton4)
+                                    .addGap(18, 18, 18)
+                                    .addComponent(jButton5))
+                                .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 396, javax.swing.GroupLayout.PREFERRED_SIZE)))
                         .addGap(0, 86, Short.MAX_VALUE))))
         );
         jPanel1Layout.setVerticalGroup(
@@ -302,9 +427,11 @@ public class Latihan3 extends javax.swing.JFrame {
                         .addGap(18, 18, 18)
                         .addComponent(jComboBox1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(jTextField3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(jButton4))
+                    .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(jButton5)
+                        .addComponent(jButton4)))
                 .addGap(18, 18, 18)
                 .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 321, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
@@ -363,6 +490,10 @@ public class Latihan3 extends javax.swing.JFrame {
         // TODO add your handling code here:
     }//GEN-LAST:event_jButton4ActionPerformed
 
+    private void jButton5ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton5ActionPerformed
+        saveTableToCSV();
+    }//GEN-LAST:event_jButton5ActionPerformed
+
     /**
      * @param args the command line arguments
      */
@@ -403,6 +534,7 @@ public class Latihan3 extends javax.swing.JFrame {
     private javax.swing.JButton jButton2;
     private javax.swing.JButton jButton3;
     private javax.swing.JButton jButton4;
+    private javax.swing.JButton jButton5;
     private javax.swing.JComboBox<String> jComboBox1;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
