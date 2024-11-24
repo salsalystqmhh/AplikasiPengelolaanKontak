@@ -1,3 +1,14 @@
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import javax.swing.JOptionPane;
+import javax.swing.table.DefaultTableModel;
+
+
 /*
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/GUIForms/JFrame.java to edit this template
@@ -9,12 +20,171 @@
  */
 public class Latihan3 extends javax.swing.JFrame {
 
+    private Connection conn;
+    private final DefaultTableModel model;
     /**
      * Creates new form Latihan3
      */
     public Latihan3() {
         initComponents();
+         model = new DefaultTableModel(new Object[] {"ID", "Nama", "Nomor Telepon", "Kategori"}, 0);
+        connectToDatabase();
+        createKontakTable();
+        initActionListeners();
+        loadKontak();
     }
+      //Menghubungkan aplikasi ke database SQLite  
+    private void connectToDatabase() {
+        try {
+            conn = DriverManager.getConnection("jdbc:sqlite:kontak.db");
+            System.out.println("Koneksi ke database berhasil!");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Gagal terkoneksi ke database");
+        }
+    }
+    
+    //Membuat tabel kontak di database jika belum ada.
+    private void createKontakTable() {
+        if (conn == null) {
+            System.err.println("Koneksi ke database belum berhasil!");
+            return;
+        }
+
+        String createTableSQL = "CREATE TABLE IF NOT EXISTS kontak ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "nama TEXT NOT NULL, "
+                + "nomor_telepon TEXT NOT NULL, "
+                + "kategori TEXT NOT NULL)";
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute(createTableSQL);
+            System.out.println("Tabel kontak berhasil dibuat atau sudah ada.");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Gagal membuat tabel kontak");
+        }
+    }
+    
+    //Menambahkan kontak baru ke dalam database.
+     private void addKontak() {
+        String nama = jTextField1.getText();
+        String nomorTelepon = jTextField2.getText();
+        String kategori = (String) jComboBox1.getSelectedItem();
+
+        if (nama.isEmpty() || nomorTelepon.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Nama dan Nomor Telepon tidak boleh kosong");
+            return;
+        }
+
+        try {
+            String sql = "INSERT INTO kontak (nama, nomor_telepon, kategori) VALUES (?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, nama);
+            stmt.setString(2, nomorTelepon);
+            stmt.setString(3, kategori);
+            stmt.executeUpdate();
+            JOptionPane.showMessageDialog(this, "Kontak berhasil ditambahkan");
+            loadKontak();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Gagal menambah kontak");
+        }
+    }
+     
+     private void editKontak() {
+        int selectedRow = jTable1.getSelectedRow();
+        if (selectedRow != -1) {
+            int id = (int) jTable1.getValueAt(selectedRow, 0);
+            String nama = jTextField1.getText();
+            String nomorTelepon = jTextField2.getText();
+            String kategori = (String) jComboBox1.getSelectedItem();
+
+            try {
+                String sql = "UPDATE kontak SET nama = ?, nomor_telepon = ?, kategori = ? WHERE id = ?";
+                PreparedStatement stmt = conn.prepareStatement(sql);
+                stmt.setString(1, nama);
+                stmt.setString(2, nomorTelepon);
+                stmt.setString(3, kategori);
+                stmt.setInt(4, id);
+                stmt.executeUpdate();
+                JOptionPane.showMessageDialog(this, "Kontak berhasil diperbarui");
+                loadKontak();
+            } catch (SQLException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Gagal mengedit kontak");
+            }
+        }
+    }
+     
+      private void deleteKontak() {
+        int selectedRow = jTable1.getSelectedRow();
+        if (selectedRow != -1) {
+            int id = (int) jTable1.getValueAt(selectedRow, 0);
+
+            try {
+                String sql = "DELETE FROM kontak WHERE id = ?";
+                PreparedStatement stmt = conn.prepareStatement(sql);
+                stmt.setInt(1, id);
+                stmt.executeUpdate();
+                JOptionPane.showMessageDialog(this, "Kontak berhasil dihapus");
+                loadKontak();
+            } catch (SQLException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Gagal menghapus kontak");
+            }
+        }
+    }
+      
+     private void searchKontak() {
+        String query = JOptionPane.showInputDialog(this, "Masukkan nama atau nomor telepon:");
+        if (query != null && !query.isEmpty()) {
+            try {
+                String sql = "SELECT * FROM kontak WHERE nama LIKE ? OR nomor_telepon LIKE ?";
+                PreparedStatement stmt = conn.prepareStatement(sql);
+                stmt.setString(1, "%" + query + "%");
+                stmt.setString(2, "%" + query + "%");
+                ResultSet rs = stmt.executeQuery();
+
+                model.setRowCount(0);
+                while (rs.next()) {
+                    model.addRow(new Object[] {
+                        rs.getInt("id"), rs.getString("nama"), rs.getString("nomor_telepon"), rs.getString("kategori")
+                    });
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Gagal mencari kontak");
+            }
+        }
+    }
+     
+    private void loadKontak() {
+        try {
+            String sql = "SELECT * FROM kontak";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            ResultSet rs = stmt.executeQuery();
+
+            model.setRowCount(0);
+            while (rs.next()) {
+                model.addRow(new Object[] {
+                    rs.getInt("id"), rs.getString("nama"), rs.getString("nomor_telepon"), rs.getString("kategori")
+                });
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Gagal memuat kontak");
+        }
+        
+        jTable1.setModel(model);
+    }
+    
+    private void initActionListeners() {
+        jButton1.addActionListener(e -> addKontak());
+        jButton2.addActionListener(e -> editKontak());
+        jButton3.addActionListener(e -> deleteKontak());
+        jButton4.addActionListener(e -> searchKontak());
+    }
+
 
     /**
      * This method is called from within the constructor to initialize the form.
@@ -35,8 +205,6 @@ public class Latihan3 extends javax.swing.JFrame {
         jComboBox1 = new javax.swing.JComboBox<>();
         jTextField3 = new javax.swing.JTextField();
         jButton4 = new javax.swing.JButton();
-        jButton5 = new javax.swing.JButton();
-        jButton6 = new javax.swing.JButton();
         jScrollPane2 = new javax.swing.JScrollPane();
         jTable1 = new javax.swing.JTable();
         jPanel2 = new javax.swing.JPanel();
@@ -48,7 +216,7 @@ public class Latihan3 extends javax.swing.JFrame {
 
         jPanel1.setBackground(new java.awt.Color(204, 204, 255));
 
-        jLabel2.setText("Telpon");
+        jLabel2.setText("NomorTelpon");
 
         jLabel3.setText("Kategori");
 
@@ -58,7 +226,7 @@ public class Latihan3 extends javax.swing.JFrame {
 
         jButton3.setText("Hapus");
 
-        jComboBox1.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Item 1", "Item 2", "Item 3", "Item 4" }));
+        jComboBox1.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Teman", "Keluarga", "Kerja" }));
 
         jTextField3.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -72,10 +240,6 @@ public class Latihan3 extends javax.swing.JFrame {
                 jButton4ActionPerformed(evt);
             }
         });
-
-        jButton5.setText("Muat");
-
-        jButton6.setText("Simpan");
 
         jTable1.setModel(new javax.swing.table.DefaultTableModel(
             new Object [][] {
@@ -98,35 +262,30 @@ public class Latihan3 extends javax.swing.JFrame {
                 .addGap(128, 128, 128)
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(jPanel1Layout.createSequentialGroup()
-                        .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 396, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(0, 0, Short.MAX_VALUE))
+                        .addGap(70, 70, 70)
+                        .addComponent(jButton1)
+                        .addGap(18, 18, 18)
+                        .addComponent(jButton2)
+                        .addGap(18, 18, 18)
+                        .addComponent(jButton3)
+                        .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                     .addGroup(jPanel1Layout.createSequentialGroup()
                         .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jLabel2)
-                            .addComponent(jLabel3))
-                        .addGap(52, 52, 52)
-                        .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addGroup(jPanel1Layout.createSequentialGroup()
                                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                    .addGroup(jPanel1Layout.createSequentialGroup()
-                                        .addComponent(jButton4)
-                                        .addGap(18, 18, 18)
-                                        .addComponent(jButton5)
-                                        .addGap(18, 18, 18)
-                                        .addComponent(jButton6))
-                                    .addGroup(jPanel1Layout.createSequentialGroup()
-                                        .addComponent(jButton1)
-                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                                        .addComponent(jButton2)
-                                        .addGap(18, 18, 18)
-                                        .addComponent(jButton3)))
-                                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                            .addGroup(jPanel1Layout.createSequentialGroup()
+                                    .addComponent(jLabel2)
+                                    .addComponent(jLabel3))
+                                .addGap(52, 52, 52)
                                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                    .addComponent(jTextField3, javax.swing.GroupLayout.PREFERRED_SIZE, 318, javax.swing.GroupLayout.PREFERRED_SIZE)
                                     .addComponent(jComboBox1, javax.swing.GroupLayout.PREFERRED_SIZE, 278, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                    .addComponent(jTextField2, javax.swing.GroupLayout.PREFERRED_SIZE, 278, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addGap(0, 76, Short.MAX_VALUE))))))
+                                    .addComponent(jTextField2, javax.swing.GroupLayout.PREFERRED_SIZE, 278, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                            .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                .addGroup(jPanel1Layout.createSequentialGroup()
+                                    .addComponent(jTextField3, javax.swing.GroupLayout.PREFERRED_SIZE, 318, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                    .addComponent(jButton4))
+                                .addComponent(jScrollPane2, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 396, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                        .addGap(0, 86, Short.MAX_VALUE))))
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -143,20 +302,17 @@ public class Latihan3 extends javax.swing.JFrame {
                         .addGap(18, 18, 18)
                         .addComponent(jComboBox1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addComponent(jTextField3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jButton4)
-                    .addComponent(jButton5)
-                    .addComponent(jButton6))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                    .addComponent(jTextField3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jButton4))
+                .addGap(18, 18, 18)
                 .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 321, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jButton2)
                     .addComponent(jButton1)
+                    .addComponent(jButton2)
                     .addComponent(jButton3))
-                .addContainerGap())
+                .addContainerGap(18, Short.MAX_VALUE))
         );
 
         getContentPane().add(jPanel1, java.awt.BorderLayout.CENTER);
@@ -178,9 +334,9 @@ public class Latihan3 extends javax.swing.JFrame {
                     .addComponent(jLabel4)
                     .addGroup(jPanel2Layout.createSequentialGroup()
                         .addComponent(jLabel1)
-                        .addGap(61, 61, 61)
+                        .addGap(90, 90, 90)
                         .addComponent(jTextField1, javax.swing.GroupLayout.PREFERRED_SIZE, 275, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                .addContainerGap(119, Short.MAX_VALUE))
+                .addContainerGap(90, Short.MAX_VALUE))
         );
         jPanel2Layout.setVerticalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -188,7 +344,7 @@ public class Latihan3 extends javax.swing.JFrame {
                 .addGap(34, 34, 34)
                 .addComponent(jLabel4)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 42, Short.MAX_VALUE)
-                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(jTextField1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(jLabel1))
                 .addContainerGap())
@@ -247,8 +403,6 @@ public class Latihan3 extends javax.swing.JFrame {
     private javax.swing.JButton jButton2;
     private javax.swing.JButton jButton3;
     private javax.swing.JButton jButton4;
-    private javax.swing.JButton jButton5;
-    private javax.swing.JButton jButton6;
     private javax.swing.JComboBox<String> jComboBox1;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
